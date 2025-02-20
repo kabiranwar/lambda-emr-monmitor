@@ -1,0 +1,32 @@
+import boto3
+
+def lambda_handler(event, context):
+    # Initialize clients
+    emr_client = boto3.client('emr')
+    sns_client = boto3.client('sns')
+    
+    # SNS Topic ARN
+    sns_topic_arn = 'arn:aws:sns:us-east-1:637423398566:s3notification'
+    
+    # List EMR clusters
+    response = emr_client.list_clusters(ClusterStates=['STARTING', 'BOOTSTRAPPING', 'RUNNING', 'WAITING', 'TERMINATING', 'TERMINATED', 'TERMINATED_WITH_ERRORS'])
+    
+    # Check cluster states
+    for cluster in response['Clusters']:
+        cluster_id = cluster['Id']
+        cluster_name = cluster['Name']
+        cluster_state = cluster['Status']['State']
+        
+        # If cluster is not in WAITING state, send notification
+        if cluster_state != 'WAITING':
+            message = f"EMR Cluster Alert!\nCluster Name: {cluster_name}\nCluster ID: {cluster_id}\nState: {cluster_state}"
+            sns_client.publish(
+                TopicArn=sns_topic_arn,
+                Message=message,
+                Subject="EMR Cluster State Alert"
+            )
+    
+    return {
+        'statusCode': 200,
+        'body': 'Cluster state check completed.'
+    }
