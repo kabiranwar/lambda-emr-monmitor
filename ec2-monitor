@@ -1,0 +1,63 @@
+import boto3
+import json
+import os
+
+def lambda_handler(event, context):
+    # Initialize clients
+    print(event)
+    ec2 = boto3.client('ec2')
+    sns = boto3.client('sns')
+    
+    # Get the instance ID from the CloudWatch event
+    instance_id = event['detail']['instance-id']
+    instance_state = event['detail']['state']
+    Shutdown_Time = ['time']
+    Region = ['region']
+    ec2arn = ['resources']
+    
+    # Get the instance name from the tags
+    response = ec2.describe_instances(InstanceIds=[instance_id])
+    instance_name = "Unnamed"
+    
+    for reservation in response['Reservations']:
+        for instance in reservation['Instances']:
+            for tag in instance.get('Tags', []):
+                if tag['Key'] == 'Name':
+                    instance_name = tag['Value']
+                    break
+    
+    topic_arn = os.getenv("SNS_TOPIC_ARN")
+    # Prepare the SNS message
+    #message = f"EC2 Instance {instance_name} (ID: {instance_id}) has been {instance_state}."
+    alert_message = f"""
+    🚨 AWS EC2 Instance Shutdown/Termination Alert 🚨
+
+    Dear User,
+
+    This is an automated alert to notify you that an AWS EC2 instance has been **{instance_state}**.
+
+    🔹 Instance ID: {instance_id}
+    🔹 Instance Name: {instance_name}
+    🔹 Region: {Region}
+    🔹 Time: {Shutdown_Time}
+
+    ⚠️ Impact: This instance is no longer available. If this was unintentional, please take appropriate action immediately.
+
+    For more details, visit the AWS Console: {ec2arn}
+
+    Best regards,  
+    AWS Monitoring Team
+    """
+    
+    # Publish the message to the SNS topic
+    sns_topic_arn = topic_arn
+
+    sns.publish(
+        TopicArn=sns_topic_arn,
+        Message=alert_message,
+        Subject= f"AWS EC2 Instance Shutdown/Termination Alert"   
+    )
+    return {
+        'statusCode': 200,
+        'body': 'Notification sent successfully!'
+    }
